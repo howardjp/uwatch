@@ -1,4 +1,4 @@
-# $jameshoward: Makefile,v 1.1.1.1 2000/05/17 03:10:22 howardjp Exp $
+# $Id$
 
 PROG=	uwatch
 CFLAGS=	-Wall

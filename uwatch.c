@@ -1,5 +1,5 @@
 /*
- * $jameshoward: uwatch.c,v 1.4 2000/07/07 03:32:14 howardjp Exp $
+ * $Id$
  *
  * Copyright (c) 1999
  *      Arbornet, Inc.  All rights reserved.
