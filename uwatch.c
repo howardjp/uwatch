@@ -54,6 +54,8 @@
                  some of the dumber things in it.
 */
 
+#define UWVER	"uwatch v1.3-CURRENT\n"
+
 #include <sys/types.h>
 #include <sys/event.h>
 #include <sys/time.h>
@@ -119,13 +121,14 @@ void usage()
 {
 
 	fprintf(stderr, "\
-usage: watch [-f file] [-lpqrtw] [login ...]\n\
+usage: uwatch [-f file] [-lpqrtw] [login ...]\n\
 \t-f\t--  set response file (-r implied)\n\
 \t-l\t--  list localhost\n\
 \t-p\t--  list port\n\
 \t-q\t--  list only who is logged in and terminate\n\
 \t-r\t--  use response file (defualts to ~/.watchrc)\n\
 \t-t\t--  list login/logout time\n\
+\t-u\t--  print the version number\n\
 \t-?\t--  print this message\n");
 	exit(0);
 }
@@ -159,6 +162,10 @@ void processparams(argc,argv)
 			break;
 		case 'w':
 			where = 1;
+			break;
+		case 't':
+			fprintf(stderr, UWVER);
+			exit(0);
 			break;
 		case '?':
 			usage();
