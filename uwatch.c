@@ -55,6 +55,8 @@
 */
 
 #include <sys/types.h>
+#include <sys/event.h>
+#include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <fcntl.h>
@@ -77,8 +79,6 @@ struct linerec { char name[10]; char line[20]; }
        lines[MAXTTYS];		/* a record for each tty/line/port */
 
 char bell, names[MAXNAMES][9];  /* table of names to watch for     */
-
-int wtfd; 			/* wtmp file descriptor */
 
 void notify(char *msg, struct utmp login) {
         char tmpname[65] = "\0", tmphost[65] = "\0", tmpline[65] = "\0", tmptime
@@ -209,67 +209,105 @@ void read_utmp()
 	close(fd);
 }
 
-void open_wtmp()
+int open_wtmp()
 {	
+    int rc = open(_PATH_WTMP,O_RDONLY);
+    if (rc == -1) 
+     perror(_PATH_WTMP);
+    else
+	lseek(rc, 0, SEEK_END); 
 
-	wtfd = open(_PATH_WTMP, O_RDONLY);
-	if (wtfd == -1) { perror(_PATH_WTMP); exit(1); }	
-	lseek(wtfd, 0, SEEK_END); 
+    return(rc);
 }
 
-void tail_wtmp()
-{		int l; /*which line? */
-		struct utmp uin;
-		if (read(wtfd, &uin, sizeof(struct utmp)) 
-			          != sizeof(struct utmp)) return;
-		for (l = 0; l < MAXTTYS ; l++) 
-			if ( strcmp(lines[l].line, uin.ut_line) == 0 
-			||   strcmp(lines[l].line, ""         ) == 0 
-			   ) break;
-		if (inlist(uin.ut_name))
-			notify("\r\nIn", uin);
-		if (inlist(lines[l].name)) {
-			strncpy(uin.ut_name, lines[l].name, UT_NAMESIZE);
-			notify("\r\nOut", uin);
-			uin.ut_name[0] = '\0';
-		}
-		strcpy(lines[l].name, uin.ut_name);
-		strcpy(lines[l].line, uin.ut_line);
+void tail_wtmp(int wtfd)
+{		
+    int l; /*which line? */
+    struct utmp uin;
+
+    if (read(wtfd, &uin, sizeof(struct utmp)) != sizeof(struct utmp)) 
+	return;
+    
+    for (l = 0; l < MAXTTYS ; l++) 
+	if (strcmp(lines[l].line, uin.ut_line) == 0 || 
+	    strcmp(lines[l].line, "") == 0) 
+	    break;
+    
+    if (inlist(uin.ut_name))
+	notify("\r\nIn", uin);
+    if (inlist(lines[l].name)) {
+	strncpy(uin.ut_name, lines[l].name, UT_NAMESIZE);
+	notify("\r\nOut", uin);
+	uin.ut_name[0] = '\0';
+    }
+    strcpy(lines[l].name, uin.ut_name);
+    strcpy(lines[l].line, uin.ut_line);
 }
 
 char **rargv;
 
-void rehash(int nil) 
+void rehash(int nil)
 {
+    if(vfork() )
+	execvp(rargv[0], rargv);
+    else
+	exit(0);
+}
 
-	if(vfork() )
-		execvp(rargv[0], rargv);
-	else
-		exit(0);
+void logout(int nil)
+{
+    exit(EXIT_SUCCESS);
 }
 
 int main (argc,argv) int argc; char **argv;
 {
 
-	watchfile = strcat(getenv("HOME"), "/.watchrc");
 
-	rargv = argv;
-	signal(SIGHUP, rehash);
-	processparams(argc,argv);		/* opts, more names  */
-	if (response)
-		read_watchlist();		/* store in names[n] */
-	read_utmp();				/* store in lines[l] */
-	if (quick == 1) exit(1);	
-	open_wtmp();				/* and seek to eof   */
-	if (!fork()) {
-		while (1) {
-			if (!isatty(STDIN_FILENO)) {
-				exit(0);
-			}
-			sleep(2);
-			tail_wtmp();		/* new login/logout? */
-		}
+    struct kevent events[3];  /* SIGHUP handler, ppid dies, file to read */
+    
+    if(!(watchfile = malloc(strlen(getenv("HOME"))+strlen("/.watchrc")+1)))
+	return(fprintf(stderr,"malloc failure\n"),EXIT_FAILURE);
+    else
+	watchfile = strcat(getenv("HOME"),"/.watchrc");
+
+    rargv = argv;
+    processparams(argc,argv);		/* opts, more names  */
+    if (response)
+	read_watchlist();		/* store in names[n] */
+    read_utmp();				/* store in lines[l] */
+    if (quick == 1) 
+	return(EXIT_SUCCESS);
+
+    EV_SET(&events[0],SIGHUP,EVFILT_SIGNAL,EV_ADD,0,NULL,rehash);
+    EV_SET(&events[1],getppid(),EVFILT_PROC,EV_ADD,NOTE_EXIT,NULL,logout);
+
+    if (!fork())
+    {
+	int evtQ;
+	int wtmpFd;
+	struct kevent myEvt;
+
+	if((evtQ = kqueue()) == -1)
+	    return(fprintf(stderr,"couldn't create kernel Q\n"),EXIT_FAILURE);
+
+	if((wtmpFd = open_wtmp()) == -1)
+	    return(fprintf(stderr,"open_wtmp\n"),EXIT_FAILURE);
+
+	EV_SET(&events[2],wtmpFd,EVFILT_READ,EV_ADD,0,NULL,tail_wtmp);
+
+	if(kevent(evtQ,events,3,NULL,0,NULL) == -1)
+	    return(fprintf(stderr,"couldn't insert events\n"),EXIT_FAILURE);
+
+	(void)sigblock(sigmask(SIGHUP));
+	for( ; ; )
+	{
+
+	    if(kevent(evtQ,NULL,0,&myEvt,1,NULL) == -1)
+		return(fprintf(stderr,"evt read failure\n"),EXIT_FAILURE);
+
+	    ((void (*)(int))myEvt.udata)(myEvt.ident);
 	}
-
-	return 0;
+	return(EXIT_SUCCESS);
+    }
+    return(EXIT_SUCCESS);
 }
