@@ -32,7 +32,7 @@
 .\" Manual page for uwatch(1).  Formatted for BSD.  Dear I hope this
 .\" works.
 .Dd May 6, 1997
-.Dt UWATCH 1 URM
+.Dt UWATCH 1 LOCAL
 .Sh NAME
 .Nm uwatch
 .Nd notifies users of user login and logouts
@@ -78,6 +78,11 @@ List calling host on notification.
 The 
 .Nm uwatch
 response file is a file with one user name per line.  
+.Sh WEBSITE
+For more information, please see
+.Ar http://github.com/howardjp/uwatch 
+and 
+.Ar http://www.arbornet.org .
 .Sh SEE ALSO
 .Xr finger 1 ,
 .Xr last 1 ,
@@ -89,7 +94,3 @@ response file is a file with one user name per line.
 This program first appeared on a BBS called M-Net (m-net.arbornet.org).  It
 was originally written for SYSIII then updated for BSD/OS.  This current
 version has been entirely rewritten and ported to FreeBSD.
-.Sh BUGS
-Lots of them, it likes to walk over its own memory.  But other than that,
-it seems to run correctly... :)
-
